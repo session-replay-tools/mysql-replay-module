@@ -1,0 +1,8 @@
+tc_addon_name=tc_mysql_module
+PROTOCOL_MODULES="tc_mysql_module"
+TC_PAYLOAD=YES
+TC_DIGEST=YES
+mysql_header="$tc_addon_dir/password.h $tc_addon_dir/pairs.h $tc_addon_dir/protocol.h"
+mysql_src="$tc_addon_dir/password.c $tc_addon_dir/pairs.c $tc_addon_dir/protocol.c"
+TC_ADDON_DEPS="$TC_ADDON_DEPS $mysql_header"
+TC_ADDON_SRCS="$mysql_src $tc_addon_dir/tc_mysql_module.c"
