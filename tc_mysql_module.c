@@ -247,59 +247,59 @@ mysql_dispose_auth(tc_sess_t *s, tc_iph_t *ip, tc_tcph_t *tcp)
 static int 
 prepare_for_renew_session(tc_sess_t *s, tc_iph_t *ip, tc_tcph_t *tcp)
 {
-    uint16_t            size_ip, t_cont_len, fir_cont_len, sec_cont_len;
-    uint32_t            total_cont_len, base_seq;
+    uint16_t            size_ip, t_cont_len, fir_clen, sec_clen;
+    uint32_t            tot_clen, base_seq;
     uint64_t            key;
+    tc_iph_t           *fir_ip, *t_ip, *sec_ip;
+    tc_tcph_t          *fir_tcp, *t_tcp, *sec_tcp;
     p_link_node         ln;
     unsigned char      *p;
-    tc_iph_t     *fir_ip, *t_ip, *sec_ip;
-    tc_tcph_t    *fir_tcp, *t_tcp, *sec_tcp;
     mysql_table_item_t *item;
 
     sec_ip = NULL;
     sec_tcp = NULL;
     s->sm.need_rep_greet = 1;
 
-    key   = get_key(ip->saddr, tcp->source);
+    key = get_key(ip->saddr, tcp->source);
 
     p = (unsigned char *) hash_find(ctx.fir_auth_table, key);
-    fir_ip = (tc_iph_t *) (p + ETHERNET_HDR_LEN);
-    size_ip = fir_ip->ihl << 2;
-    fir_tcp = (tc_tcph_t *) ((char *) fir_ip + size_ip);
-    fir_cont_len = TCP_PAYLOAD_LENGTH(fir_ip, fir_tcp);
-    total_cont_len = fir_cont_len;
+    fir_ip   = (tc_iph_t *) (p + ETHERNET_HDR_LEN);
+    size_ip  = fir_ip->ihl << 2;
+    fir_tcp  = (tc_tcph_t *) ((char *) fir_ip + size_ip);
+    fir_clen = TCP_PAYLOAD_LENGTH(fir_ip, fir_tcp);
+    tot_clen = fir_clen;
 
     p = (unsigned char *) hash_find(ctx.sec_auth_table, key);
     if (p != NULL) {
-        sec_ip = (tc_iph_t *) (p + ETHERNET_HDR_LEN);
-        size_ip = sec_ip->ihl << 2;
-        sec_tcp = (tc_tcph_t *) ((char *) sec_ip + size_ip);
-        sec_cont_len = TCP_PAYLOAD_LENGTH(sec_ip, sec_tcp);
-        total_cont_len += sec_cont_len;
+        sec_ip    = (tc_iph_t *) (p + ETHERNET_HDR_LEN);
+        size_ip   = sec_ip->ihl << 2;
+        sec_tcp   = (tc_tcph_t *) ((char *) sec_ip + size_ip);
+        sec_clen  = TCP_PAYLOAD_LENGTH(sec_ip, sec_tcp);
+        tot_clen += sec_clen;
     } else {
-        sec_cont_len = 0;
+        sec_clen  = 0;
         tc_log_debug1(LOG_INFO, 0, "no sec auth:%u", ntohs(s->src_port));
     }
 
     item = hash_find(ctx.table, s->hash_key);
     if (item) {
-        total_cont_len += item->tot_cont_len;
+        tot_clen += item->tot_cont_len;
     }
 
-    tc_log_debug2(LOG_INFO, 0, "total len subtracted:%u,p:%u", total_cont_len,
+    tc_log_debug2(LOG_INFO, 0, "total len subtracted:%u,p:%u", tot_clen,
             ntohs(s->src_port));
 
-    tcp->seq     = htonl(ntohl(tcp->seq) - total_cont_len);
+    tcp->seq     = htonl(ntohl(tcp->seq) - tot_clen);
     fir_tcp->seq = htonl(ntohl(tcp->seq) + 1);
-    save_packet(s, s->slide_win_packs, fir_ip, fir_tcp);  
+    tc_save_pack(s, s->slide_win_packs, fir_ip, fir_tcp);  
 
     if (sec_tcp != NULL) {
-        sec_tcp->seq = htonl(ntohl(fir_tcp->seq) + fir_cont_len);
-        save_packet(s, s->slide_win_packs, sec_ip, sec_tcp);
+        sec_tcp->seq = htonl(ntohl(fir_tcp->seq) + fir_clen);
+        tc_save_pack(s, s->slide_win_packs, sec_ip, sec_tcp);
         tc_log_debug1(LOG_INFO, 0, "add sec auth:%u", ntohs(s->src_port));
     }
 
-    base_seq = ntohl(fir_tcp->seq) + fir_cont_len + sec_cont_len;
+    base_seq = ntohl(fir_tcp->seq) + fir_clen + sec_clen;
 
     if (item) {
         ln = link_list_first(item->list); 
@@ -308,7 +308,7 @@ prepare_for_renew_session(tc_sess_t *s, tc_iph_t *ip, tc_tcph_t *tcp)
             t_ip  = (tc_iph_t *) (p + ETHERNET_HDR_LEN);
             t_tcp = (tc_tcph_t *) ((char *) t_ip + size_ip);
             t_tcp->seq = htonl(base_seq);
-            save_packet(s, s->slide_win_packs, t_ip, t_tcp);  
+            tc_save_pack(s, s->slide_win_packs, t_ip, t_tcp);  
             base_seq += TCP_PAYLOAD_LENGTH(t_ip, t_tcp);
             ln = link_list_get_next(item->list, ln);
         }
@@ -390,8 +390,8 @@ check_needed_for_sec_auth(tc_sess_t *s, tc_iph_t *ip, tc_tcph_t *tcp)
 static int 
 proc_auth(tc_sess_t *s, tc_iph_t *ip, tc_tcph_t *tcp)
 {
-    uint16_t          size_tcp;
-    unsigned char    *p, *payload, pack_number;
+    uint16_t        size_tcp;
+    unsigned char  *p, *payload, pack_number;
 
     if (!s->sm.rcv_rep_greet) {
         return PACK_STOP;
@@ -408,8 +408,8 @@ proc_auth(tc_sess_t *s, tc_iph_t *ip, tc_tcph_t *tcp)
 static int
 mysql_parse_user_info(tc_conf_t *cf, tc_cmd_t *cmd)
 {
-    char         pass[MAX_PASSWORD_LEN];
-    tc_str_t    *user_password;
+    char       pass[MAX_PASSWORD_LEN];
+    tc_str_t  *user_password;
 
     user_password = cf->args->elts;
 
