@@ -71,11 +71,13 @@ init_mysql_module(void *clt_settings)
 static void 
 exit_mysql_module(void *clt_settings) 
 {
-    tc_destroy_pool(ctx.pool);
-    ctx.table = NULL;
-    ctx.fir_auth_table = NULL;
-    ctx.sec_auth_table = NULL;
-    ctx.pool  = NULL;
+    if (ctx.pool != NULL) {
+        tc_destroy_pool(ctx.pool);
+        ctx.table = NULL;
+        ctx.fir_auth_table = NULL;
+        ctx.sec_auth_table = NULL;
+        ctx.pool  = NULL;
+    }
 }
 
 
