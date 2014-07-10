@@ -41,7 +41,7 @@ static int
 init_mysql_module(void *clt_settings)
 {
 
-    ctx.pool = tc_create_pool(SESS_TABLE_POOL_SIZE, 0);
+    ctx.pool = tc_create_pool(TC_DEFAULT_POOL_SIZE, 0, 0);
 
     if (ctx.pool) {
 
