@@ -103,12 +103,3 @@ retrieve_mysql_user_pwd_info(tc_pool_t *pool, char *pairs)
     return 0;
 }
 
-
-void
-release_mysql_user_pwd_info()
-{
-    if (user_pwd_table != NULL) {
-        user_pwd_table = NULL;
-    }
-}
-
