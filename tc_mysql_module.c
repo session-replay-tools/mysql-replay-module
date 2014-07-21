@@ -249,7 +249,7 @@ mysql_dispose_auth(tc_sess_t *s, tc_iph_t *ip, tc_tcph_t *tcp)
 static int 
 prepare_for_renew_session(tc_sess_t *s, tc_iph_t *ip, tc_tcph_t *tcp)
 {
-    uint16_t            size_ip, t_cont_len, fir_clen, sec_clen;
+    uint16_t            size_ip, fir_clen, sec_clen;
     uint32_t            tot_clen, base_seq;
     uint64_t            key;
     tc_iph_t           *fir_ip, *t_ip, *sec_ip;
@@ -323,7 +323,6 @@ prepare_for_renew_session(tc_sess_t *s, tc_iph_t *ip, tc_tcph_t *tcp)
 static int 
 proc_when_sess_created(tc_sess_t *s, tc_iph_t *ip, tc_tcph_t *tcp)
 {
-    uint64_t          key;
     tc_mysql_session *data;
     
     data = (tc_mysql_session *) tc_pcalloc(s->pool, sizeof(tc_mysql_session));
@@ -392,9 +391,6 @@ check_needed_for_sec_auth(tc_sess_t *s, tc_iph_t *ip, tc_tcph_t *tcp)
 static int 
 proc_auth(tc_sess_t *s, tc_iph_t *ip, tc_tcph_t *tcp)
 {
-    uint16_t        size_tcp;
-    unsigned char  *p, *payload, pack_number;
-
     if (!s->sm.rcv_rep_greet) {
         return PACK_STOP;
     }

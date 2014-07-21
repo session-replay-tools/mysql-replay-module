@@ -200,7 +200,7 @@ change_clt_auth_content(unsigned char *payload, int length,
     q = p;
     p = p + 23;
     len = p - payload;
-    if (len > length) {
+    if ((int) len > length) {
         tc_log_info(LOG_ERR, 0, "payload len is too short:%d,%u", length, len);
         return 0;
     }
@@ -238,7 +238,7 @@ change_clt_auth_content(unsigned char *payload, int length,
     /* skip scramble_buff length */
     p = p + 1;
     len = p - payload + SCRAMBLE_LENGTH;
-    if (len > length) {
+    if ((int) len > length) {
         tc_log_info(LOG_ERR, 0, "payload len is too short too:%d,%u",
                 length, len);
         return 0;
