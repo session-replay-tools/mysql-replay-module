@@ -38,7 +38,7 @@ typedef struct {
 static tc_mysql_ctx_t ctx;
 
 static int 
-init_mysql_module(void *clt_settings)
+init_mysql_module()
 {
 
     ctx.pool = tc_create_pool(TC_DEFAULT_POOL_SIZE, 0, 0);
@@ -69,7 +69,7 @@ init_mysql_module(void *clt_settings)
 
 
 static void 
-exit_mysql_module(void *clt_settings) 
+exit_mysql_module() 
 {
     if (ctx.pool != NULL) {
         tc_destroy_pool(ctx.pool);
