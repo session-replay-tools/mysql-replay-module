@@ -72,7 +72,7 @@ Please refer to [TCPCopy](https://github.com/session-replay-tools/tcpcopy) for m
       intercept to pass response packets to it.
 
 ##Note
-1. Both MySQL instances in the target server and online server must have the same user accounts and their privileges although passwords could be different
+1. Both MySQL instances on the target server and online server must have the same user accounts and their privileges although passwords could be different
 2. Only the complete sesssion could be replayed
 
 
