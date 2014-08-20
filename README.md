@@ -26,7 +26,7 @@ Please refer to [TCPCopy](https://github.com/session-replay-tools/tcpcopy) for m
 ##Usage guide
  
 ###1) On the target server which runs MySQL applications:
-      Set route command to route response packets to the assistant server
+      Set route commands to route response packets to the assistant server
 
         For example:
 
