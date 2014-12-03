@@ -89,6 +89,10 @@ check_renew_session(tc_iph_t *ip, tc_tcph_t *tcp)
     uint64_t        key;
     unsigned char  *payload, command, pack_number;
 
+    if (ctx.fir_auth_table == NULL) {
+        return false;
+    }
+
     key   = get_key(ip->saddr, tcp->source);
     value = hash_find(ctx.fir_auth_table, key);
     if (value == NULL) {
