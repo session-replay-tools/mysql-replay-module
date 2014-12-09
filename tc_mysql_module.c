@@ -277,7 +277,7 @@ prepare_for_renew_session(tc_sess_t *s, tc_iph_t *ip, tc_tcph_t *tcp)
         fir_clen = TCP_PAYLOAD_LENGTH(fir_ip, fir_tcp);
         tot_clen = fir_clen;
     } else {
-        tc_log_info(LOG_ERR, 0, "no first auth:%u", ntohs(s->src_port));
+        tc_log_info(LOG_WARN, 0, "no first auth:%u", ntohs(s->src_port));
         return TC_ERR;
     }
 
