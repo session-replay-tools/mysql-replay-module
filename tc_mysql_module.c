@@ -269,11 +269,17 @@ prepare_for_renew_session(tc_sess_t *s, tc_iph_t *ip, tc_tcph_t *tcp)
     key = get_key(ip->saddr, tcp->source);
 
     p = (unsigned char *) hash_find(ctx.fir_auth_table, key);
-    fir_ip   = (tc_iph_t *) (p + ETHERNET_HDR_LEN);
-    size_ip  = fir_ip->ihl << 2;
-    fir_tcp  = (tc_tcph_t *) ((char *) fir_ip + size_ip);
-    fir_clen = TCP_PAYLOAD_LENGTH(fir_ip, fir_tcp);
-    tot_clen = fir_clen;
+
+    if (p != NULL) {
+        fir_ip   = (tc_iph_t *) (p + ETHERNET_HDR_LEN);
+        size_ip  = fir_ip->ihl << 2;
+        fir_tcp  = (tc_tcph_t *) ((char *) fir_ip + size_ip);
+        fir_clen = TCP_PAYLOAD_LENGTH(fir_ip, fir_tcp);
+        tot_clen = fir_clen;
+    } else {
+        tc_log_info(LOG_ERR, 0, "no first auth:%u", ntohs(s->src_port));
+        return TC_ERR;
+    }
 
     p = (unsigned char *) hash_find(ctx.sec_auth_table, key);
     if (p != NULL) {
