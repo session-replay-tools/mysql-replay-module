@@ -2,7 +2,7 @@
 #include <xcopy.h>
 #include "pairs.h"
 
-static hash_table *user_pwd_table;
+static hash_table *user_pwd_table = NULL;
 
 static uint64_t
 get_key_from_user(char *user)
@@ -27,6 +27,11 @@ retrieve_user_pwd(char *user)
 {
     uint64_t    key;
     mysql_user *p_user_info;
+
+    if (user_pwd_table == NULL) {
+        tc_log_info(LOG_ERR, 0, "empty user info in conf/plugin.conf");
+        return NULL;
+    }
 
     key         = get_key_from_user(user);
     p_user_info = hash_find(user_pwd_table, key);
