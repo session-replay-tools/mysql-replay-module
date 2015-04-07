@@ -8,6 +8,7 @@
 #define COM_STMT_EXECUTE 23
 #define COM_QUERY 3
 #define MAX_SP_SIZE 256
+#define MAX_USER_INFO 4096
 #define ENCRYPT_LEN 16
 #define SEED_323_LENGTH  8
 
@@ -416,16 +417,22 @@ proc_auth(tc_sess_t *s, tc_iph_t *ip, tc_tcph_t *tcp)
 static int
 mysql_parse_user_info(tc_conf_t *cf, tc_cmd_t *cmd)
 {
-    char       pass[MAX_PASSWORD_LEN];
+    char       pass[MAX_USER_INFO];
     tc_str_t  *user_password;
 
     user_password = cf->args->elts;
 
-    tc_memzero(pass, MAX_PASSWORD_LEN);
+    tc_memzero(pass, MAX_USER_INFO);
+
+    if (user_password[1].len >= MAX_USER_INFO) {
+        tc_log_info(LOG_ERR, 0, "user password pair too long");
+        return TC_ERR;
+    }
+
     memcpy(pass, user_password[1].data, user_password[1].len);
 
     if (retrieve_mysql_user_pwd_info(cf->pool, pass) == -1) {
-        tc_log_info(LOG_ERR, 0, "wrong -u argument");
+        tc_log_info(LOG_ERR, 0, "parse user password error");
         return TC_ERR;
     }
 
