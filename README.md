@@ -36,7 +36,7 @@ Please refer to [TCPCopy](https://github.com/session-replay-tools/tcpcopy) for m
 
            route add -host 10.110.12.15 gw 10.110.12.18
 
-###2) On the assistant server which runs intercept(root privilege is required):
+###2) On the assistant server which runs intercept(root privilege or the CAP_NET_RAW capability is required):
    
        ./intercept -F <filter> -i <device,> 
 	  
@@ -50,7 +50,7 @@ Please refer to [TCPCopy](https://github.com/session-replay-tools/tcpcopy) for m
       listens on port 3306 from device eth0 
     
 	
-###3) On the online source server (root privilege is required):
+###3) On the online source server (root privilege or the CAP_NET_RAW capability is required):
       a) set user password pair in conf/plugin.conf in the installion directory
 
         Format:
