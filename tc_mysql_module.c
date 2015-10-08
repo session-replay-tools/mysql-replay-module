@@ -16,6 +16,7 @@ typedef struct {
     uint32_t sec_auth_checked:1;
     uint32_t sec_auth_not_yet_done:1;
     uint32_t first_auth_sent:1;
+    uint32_t auth_packet_already_added:1;
     char     scramble[SCRAMBLE_LENGTH + 1];
     char     seed323[SEED_323_LENGTH + 1];
     char     password[MAX_PASSWORD_LEN];
@@ -262,6 +263,16 @@ prepare_for_renew_session(tc_sess_t *s, tc_iph_t *ip, tc_tcph_t *tcp)
     p_link_node         ln;
     unsigned char      *p;
     mysql_table_item_t *item;
+    tc_mysql_session   *mysql_sess;
+
+    mysql_sess = s->data;
+    if (mysql_sess == NULL) {
+        tc_log_info(LOG_WARN, 0, "mysql session structure is not allocated");
+        return TC_ERR;
+    } else if (mysql_sess->auth_packet_already_added) {
+        tc_log_info(LOG_NOTICE, 0, "dup visit prepare_for_renew_session");
+        return TC_OK;
+    }
 
     sec_ip = NULL;
     sec_tcp = NULL;
@@ -305,6 +316,7 @@ prepare_for_renew_session(tc_sess_t *s, tc_iph_t *ip, tc_tcph_t *tcp)
     tcp->seq     = htonl(ntohl(tcp->seq) - tot_clen);
     fir_tcp->seq = htonl(ntohl(tcp->seq) + 1);
     tc_save_pack(s, s->slide_win_packs, fir_ip, fir_tcp);  
+    mysql_sess->auth_packet_already_added = 1;
 
     if (sec_tcp != NULL) {
         sec_tcp->seq = htonl(ntohl(fir_tcp->seq) + fir_clen);
