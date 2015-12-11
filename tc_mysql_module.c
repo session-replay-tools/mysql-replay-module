@@ -346,12 +346,16 @@ prepare_for_renew_session(tc_sess_t *s, tc_iph_t *ip, tc_tcph_t *tcp)
 static int 
 proc_when_sess_created(tc_sess_t *s, tc_iph_t *ip, tc_tcph_t *tcp)
 {
-    tc_mysql_session *data;
-    
-    data = (tc_mysql_session *) tc_pcalloc(s->pool, sizeof(tc_mysql_session));
+    tc_mysql_session *data = s->data;
 
-    if (data) {
-        s->data = data;
+    if (data == NULL) {
+        data = (tc_mysql_session *) tc_pcalloc(s->pool, sizeof(tc_mysql_session));
+
+        if (data) {
+            s->data = data;
+        }
+    } else {
+        tc_memzero(data, sizeof(tc_mysql_session)); 
     }
 
     return TC_OK;

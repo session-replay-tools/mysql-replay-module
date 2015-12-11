@@ -70,7 +70,7 @@ retrieve_mysql_user_pwd_info(tc_pool_t *pool, char *pairs)
         next = strchr(p, ',');
         q = strchr(p, '@');
 
-        if ( next != NULL) {
+        if (next != NULL) {
             if (next != p) {
                 pair_end = next - 1;
             } else {
@@ -81,7 +81,7 @@ retrieve_mysql_user_pwd_info(tc_pool_t *pool, char *pairs)
             pair_end = p + strlen(p) - 1;
         }
 
-        if ((q-p) >= 256 || (pair_end - q) >= 256) {
+        if ((q - p) >= 256 || (pair_end - q) >= 256) {
             tc_log_info(LOG_WARN, 0, "too long for user or password");
             return -1;
         }
@@ -103,7 +103,7 @@ retrieve_mysql_user_pwd_info(tc_pool_t *pool, char *pairs)
         } else {
             break;
         }
-    } while (p < end) ;
+    } while (p < end);
 
     return 0;
 }
