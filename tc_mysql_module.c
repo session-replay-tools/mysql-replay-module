@@ -344,7 +344,7 @@ prepare_for_renew_session(tc_sess_t *s, tc_iph_t *ip, tc_tcph_t *tcp)
 
 
 static int 
-proc_when_sess_created(tc_sess_t *s, tc_iph_t *ip, tc_tcph_t *tcp)
+proc_when_sess_created(tc_sess_t *s)
 {
     tc_mysql_session *data = s->data;
 
