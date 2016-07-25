@@ -278,7 +278,7 @@ prepare_for_renew_session(tc_sess_t *s, tc_iph_t *ip, tc_tcph_t *tcp)
     sec_tcp = NULL;
     s->sm.need_rep_greet = 1;
 
-    key = get_key(ip->saddr, tcp->source);
+    key = s->hash_key;
 
     p = (unsigned char *) hash_find(ctx.fir_auth_table, key);
 
@@ -361,6 +361,46 @@ proc_when_sess_created(tc_sess_t *s)
     return TC_OK;
 }
 
+static int 
+proc_when_sess_destroyed(tc_sess_t *s)
+{
+    void               *value;
+    link_list          *list;
+    p_link_node         ln, tln;
+    mysql_table_item_t *item;
+
+    value = hash_find(ctx.fir_auth_table, s->hash_key);
+    if (value != NULL) {
+        hash_del(ctx.fir_auth_table, ctx.pool, s->hash_key);
+        tc_log_info(LOG_INFO, 0, "hash del fir auth:%llu", s->hash_key);
+    }
+
+    value = hash_find(ctx.sec_auth_table, s->hash_key);
+    if (value != NULL) {
+        hash_del(ctx.sec_auth_table, ctx.pool, s->hash_key);
+        tc_log_info(LOG_INFO, 0, "hash del for sec auth:%llu", s->hash_key);
+    }
+
+    value = hash_find(ctx.table, s->hash_key);
+    if (value != NULL) {
+        item = value;
+        list = item->list;
+        ln   = link_list_first(list);
+        while (ln) {
+            tln = ln;
+            ln = link_list_get_next(list, ln);
+            link_list_remove(list, tln);
+            tc_pfree(ctx.pool, tln->data);
+            tc_pfree(ctx.pool, tln);
+        }
+
+        tc_pfree(ctx.pool, list);
+
+        hash_del(ctx.table, ctx.pool, s->hash_key);
+    }
+
+    return TC_OK;
+}
 
 static int
 proc_greet(tc_sess_t *s, tc_iph_t *ip, tc_tcph_t *tcp)
@@ -476,7 +516,7 @@ tc_module_t tc_mysql_module = {
     prepare_for_renew_session,
     check_pack_needed_for_recons,
     proc_when_sess_created,
-    NULL,
+    proc_when_sess_destroyed,
     proc_greet,
     proc_auth,
     check_needed_for_sec_auth,

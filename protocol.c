@@ -205,7 +205,6 @@ change_clt_auth_content(unsigned char *payload, int length,
         return 0;
     }
 
-    tc_log_info(LOG_INFO, 0, "before judge,cont len:%d", length);
     for (i = 0; i < 23; i++) {
         if (q[i] != 0 ) {
             tc_log_info(LOG_WARN, 0, "it is not a login packet");
@@ -225,9 +224,7 @@ change_clt_auth_content(unsigned char *payload, int length,
     strcpy(user, str);
 
     pwd = retrieve_user_pwd(user);
-    if (pwd != NULL) {
-        tc_log_info(LOG_NOTICE, 0, "user:%s,pwd:%s", user, pwd);
-    } else {
+    if (pwd == NULL) {
         tc_log_info(LOG_WARN, 0, "user:%s,pwd is null", user);
         return 0;
     }
