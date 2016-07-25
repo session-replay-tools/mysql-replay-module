@@ -372,13 +372,13 @@ proc_when_sess_destroyed(tc_sess_t *s)
     value = hash_find(ctx.fir_auth_table, s->hash_key);
     if (value != NULL) {
         hash_del(ctx.fir_auth_table, ctx.pool, s->hash_key);
-        tc_log_info(LOG_INFO, 0, "hash del fir auth:%llu", s->hash_key);
+        tc_log_debug1(LOG_INFO, 0, "hash del fir auth:%llu", s->hash_key);
     }
 
     value = hash_find(ctx.sec_auth_table, s->hash_key);
     if (value != NULL) {
         hash_del(ctx.sec_auth_table, ctx.pool, s->hash_key);
-        tc_log_info(LOG_INFO, 0, "hash del for sec auth:%llu", s->hash_key);
+        tc_log_debug1(LOG_INFO, 0, "hash del for sec auth:%llu", s->hash_key);
     }
 
     value = hash_find(ctx.table, s->hash_key);
