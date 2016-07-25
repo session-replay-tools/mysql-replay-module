@@ -219,7 +219,7 @@ mysql_dispose_auth(tc_sess_t *s, tc_iph_t *ip, tc_tcph_t *tcp)
         value = hash_find(ctx.fir_auth_table, s->hash_key);
         if (value != NULL) {
             tc_pfree(ctx.pool, value);
-            tc_log_info(LOG_INFO, 0, "free for fir auth:%llu", s->hash_key);
+            tc_log_debug1(LOG_INFO, 0, "free for fir auth:%llu", s->hash_key);
         }
 
         value = (void *) cp_fr_ip_pack(ctx.pool, ip);
@@ -241,7 +241,7 @@ mysql_dispose_auth(tc_sess_t *s, tc_iph_t *ip, tc_tcph_t *tcp)
         value = hash_find(ctx.sec_auth_table, s->hash_key);
         if (value != NULL) {
             tc_pfree(ctx.pool, value);
-            tc_log_info(LOG_INFO, 0, "free for sec auth:%llu", s->hash_key);
+            tc_log_debug1(LOG_INFO, 0, "free for sec auth:%llu", s->hash_key);
         }
         value = (void *) cp_fr_ip_pack(ctx.pool, ip);
         hash_add(ctx.sec_auth_table, ctx.pool, s->hash_key, value);
