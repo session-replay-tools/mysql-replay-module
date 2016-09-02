@@ -217,10 +217,13 @@ mysql_dispose_auth(tc_sess_t *s, tc_iph_t *ip, tc_tcph_t *tcp)
         }
         mysql_sess->first_auth_sent = 1;
         value = hash_find(ctx.fir_auth_table, s->hash_key);
-        if (value == NULL) {
-            value = (void *) cp_fr_ip_pack(ctx.pool, ip);
-            hash_add(ctx.fir_auth_table, ctx.pool, s->hash_key, value);
+        if (value != NULL) {
+            tc_pfree(ctx.pool, value);
+            tc_log_info(LOG_INFO, 0, "free for fir auth:%llu", s->hash_key);
         }
+
+        value = (void *) cp_fr_ip_pack(ctx.pool, ip);
+        hash_add(ctx.fir_auth_table, ctx.pool, s->hash_key, value);
 
     } else if (mysql_sess->first_auth_sent && mysql_sess->sec_auth_not_yet_done)
     {
@@ -236,10 +239,12 @@ mysql_dispose_auth(tc_sess_t *s, tc_iph_t *ip, tc_tcph_t *tcp)
         mysql_sess->sec_auth_not_yet_done = 0;
 
         value = hash_find(ctx.sec_auth_table, s->hash_key);
-        if (value == NULL) {
-            value = (void *) cp_fr_ip_pack(ctx.pool, ip);
-            hash_add(ctx.sec_auth_table, ctx.pool, s->hash_key, value);
+        if (value != NULL) {
+            tc_pfree(ctx.pool, value);
+            tc_log_info(LOG_INFO, 0, "free for sec auth:%llu", s->hash_key);
         }
+        value = (void *) cp_fr_ip_pack(ctx.pool, ip);
+        hash_add(ctx.sec_auth_table, ctx.pool, s->hash_key, value);
     }
 
     return TC_OK;
@@ -357,26 +362,26 @@ proc_when_sess_created(tc_sess_t *s)
 }
 
 static int 
-proc_when_sess_destroyed(tc_sess_t *s)
+release_resources(uint64_t key)
 {
     void               *value;
     link_list          *list;
     p_link_node         ln, tln;
     mysql_table_item_t *item;
 
-    value = hash_find(ctx.fir_auth_table, s->hash_key);
+    value = hash_find(ctx.fir_auth_table, key);
     if (value != NULL) {
-        hash_del(ctx.fir_auth_table, ctx.pool, s->hash_key);
-        tc_log_debug1(LOG_INFO, 0, "hash del fir auth:%llu", s->hash_key);
+        hash_del(ctx.fir_auth_table, ctx.pool, key);
+        tc_log_debug1(LOG_INFO, 0, "hash del fir auth:%llu", key);
     }
 
-    value = hash_find(ctx.sec_auth_table, s->hash_key);
+    value = hash_find(ctx.sec_auth_table, key);
     if (value != NULL) {
-        hash_del(ctx.sec_auth_table, ctx.pool, s->hash_key);
-        tc_log_debug1(LOG_INFO, 0, "hash del for sec auth:%llu", s->hash_key);
+        hash_del(ctx.sec_auth_table, ctx.pool, key);
+        tc_log_debug1(LOG_INFO, 0, "hash del for sec auth:%llu", key);
     }
 
-    value = hash_find(ctx.table, s->hash_key);
+    value = hash_find(ctx.table, key);
     if (value != NULL) {
         item = value;
         list = item->list;
@@ -391,9 +396,16 @@ proc_when_sess_destroyed(tc_sess_t *s)
 
         tc_pfree(ctx.pool, list);
 
-        hash_del(ctx.table, ctx.pool, s->hash_key);
+        hash_del(ctx.table, ctx.pool, key);
     }
 
+    return TC_OK;
+}
+
+static int 
+proc_when_sess_destroyed(tc_sess_t *s)
+{
+    release_resources(s->hash_key);
     return TC_OK;
 }
 
@@ -512,6 +524,7 @@ tc_module_t tc_mysql_module = {
     check_pack_needed_for_recons,
     proc_when_sess_created,
     proc_when_sess_destroyed,
+    release_resources,
     proc_greet,
     proc_auth,
     check_needed_for_sec_auth,
