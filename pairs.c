@@ -30,6 +30,7 @@ retrieve_user_pwd(char *user)
 
     if (user_pwd_table == NULL) {
         tc_log_info(LOG_ERR, 0, "empty user info in conf/plugin.conf");
+        fprintf(stderr, "empty user info in conf/plugin.conf\n");
         return NULL;
     }
 

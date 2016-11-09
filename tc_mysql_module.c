@@ -43,7 +43,7 @@ static int
 init_mysql_module()
 {
 
-    ctx.pool = tc_create_pool(TC_DEFAULT_POOL_SIZE, 0, 0);
+    ctx.pool = tc_create_pool(TC_PLUGIN_POOL_SIZE, 0, 0);
 
     if (ctx.pool) {
 
@@ -69,10 +69,71 @@ init_mysql_module()
     return TC_ERR;
 }
 
+static void 
+remove_table_obsolete_items(hash_table *table, tc_pool_t *pool, 
+        time_t thresh_access_tme) 
+{
+    uint32_t    i, cnt = 0;
+    link_list  *l;
+    hash_node  *hn;
+    p_link_node ln, next_ln;
+
+    if (table == NULL || table->total == 0) {
+        return;
+    }
+
+    for (i = 0; i < table->size; i ++) {
+        l  = get_link_list(table, i);
+        if (l->size > 0) {
+            ln = link_list_first(l);
+            while (ln) {
+                hn = (hash_node *) ln->data;
+                next_ln = link_list_get_next(l, ln);
+                if (hn->access_time < thresh_access_tme) {
+                    table->total--;
+                    link_list_remove(l, ln);
+                    tc_log_debug4(LOG_INFO, 0, 
+                            "hash item:%llu,ln->data:%p,ln:%p, hn->data:%p",
+                            hn->key, ln->data, ln, hn->data);
+                    tc_pfree(pool, hn->data);
+                    tc_pfree(pool, ln->data);
+                    tc_pfree(pool, ln);
+                }
+                ln = next_ln;
+            }
+
+            cnt += l->size;
+
+            if (table->total == cnt) {
+                break;
+            }
+        }
+    }
+}
+
+static void 
+remove_obsolete_resources(int is_full) 
+{
+    time_t      thresh_access_tme;
+
+    if (is_full) {
+        thresh_access_tme = tc_time() + 1;
+    } else {
+        thresh_access_tme = tc_time() - MAX_IDLE_TIME;
+    }
+
+    remove_table_obsolete_items(ctx.table, ctx.pool, thresh_access_tme);
+    remove_table_obsolete_items(ctx.fir_auth_table, ctx.pool, thresh_access_tme);
+    remove_table_obsolete_items(ctx.sec_auth_table, ctx.pool, thresh_access_tme);
+}
 
 static void 
 exit_mysql_module() 
 {
+    tc_log_info(LOG_INFO, 0, "call exit_mysql_module");
+
+    remove_obsolete_resources(1);
+
     if (ctx.pool != NULL) {
         tc_destroy_pool(ctx.pool);
         ctx.table = NULL;
@@ -81,7 +142,6 @@ exit_mysql_module()
         ctx.pool  = NULL;
     }
 }
-
 
 static bool
 check_renew_session(tc_iph_t *ip, tc_tcph_t *tcp)
@@ -220,6 +280,8 @@ mysql_dispose_auth(tc_sess_t *s, tc_iph_t *ip, tc_tcph_t *tcp)
         if (value == NULL) {
             value = (void *) cp_fr_ip_pack(ctx.pool, ip);
             hash_add(ctx.fir_auth_table, ctx.pool, s->hash_key, value);
+            tc_log_debug3(LOG_DEBUG, 0, "s:%p,hash add fir auth:%llu,value:%p",
+                    s, s->hash_key, value);
         }
 
     } else if (mysql_sess->first_auth_sent && mysql_sess->sec_auth_not_yet_done)
@@ -367,12 +429,14 @@ release_resources(uint64_t key)
     value = hash_find(ctx.fir_auth_table, key);
     if (value != NULL) {
         hash_del(ctx.fir_auth_table, ctx.pool, key);
+        tc_pfree(ctx.pool, value);
         tc_log_debug1(LOG_INFO, 0, "hash del fir auth:%llu", key);
     }
 
     value = hash_find(ctx.sec_auth_table, key);
     if (value != NULL) {
         hash_del(ctx.sec_auth_table, ctx.pool, key);
+        tc_pfree(ctx.pool, value);
         tc_log_debug1(LOG_INFO, 0, "hash del for sec auth:%llu", key);
     }
 
@@ -389,6 +453,7 @@ release_resources(uint64_t key)
             tc_pfree(ctx.pool, tln);
         }
 
+        tc_pfree(ctx.pool, value);
         tc_pfree(ctx.pool, list);
 
         hash_del(ctx.table, ctx.pool, key);
@@ -514,6 +579,7 @@ tc_module_t tc_mysql_module = {
     mysql_commands,
     init_mysql_module,
     exit_mysql_module,
+    remove_obsolete_resources,
     check_renew_session,
     prepare_for_renew_session,
     check_pack_needed_for_recons,
