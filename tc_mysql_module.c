@@ -247,7 +247,7 @@ check_pack_needed_for_recons(tc_sess_t *s, tc_iph_t *ip, tc_tcph_t *tcp)
         mysql_sess->update_fir_auth_table_item_switch++;
         if (mysql_sess->update_fir_auth_table_item_switch == 0) {
             if (hash_find(ctx.fir_auth_table, s->hash_key) == NULL) {
-                tc_log_info(LOG_ERR, 0, "no fir auth for key:%llu", 
+                tc_log_info(LOG_NOTICE, 0, "no fir auth for key:%llu", 
                         s->hash_key);
             }
         }
