@@ -44,7 +44,7 @@ static int
 init_mysql_module()
 {
 
-    ctx.pool = tc_create_pool(TC_PLUGIN_POOL_SIZE, 0, 0);
+    ctx.pool = tc_create_pool(TC_PLUGIN_POOL_SIZE * 3, 0, 0);
 
     if (ctx.pool) {
 
