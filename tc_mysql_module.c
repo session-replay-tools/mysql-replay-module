@@ -11,6 +11,7 @@
 #define MAX_USER_INFO 4096
 #define ENCRYPT_LEN 16
 #define SEED_323_LENGTH  8
+#define TC_LARGE_POOL_SIZE (3 * TC_PLUGIN_POOL_SIZE)
 
 typedef struct {
     uint32_t sec_auth_checked:1;
@@ -44,7 +45,7 @@ static int
 init_mysql_module()
 {
 
-    ctx.pool = tc_create_pool(TC_PLUGIN_POOL_SIZE * 3, 0, 0);
+    ctx.pool = tc_create_pool(TC_LARGE_POOL_SIZE, TC_PLUGIN_POOL_SUB_SIZE, 0);
 
     if (ctx.pool) {
 
