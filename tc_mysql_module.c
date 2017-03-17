@@ -317,21 +317,21 @@ check_pack_needed_for_recons(tc_sess_t *s, tc_iph_t *ip, tc_tcph_t *tcp)
         }
 
         item = hash_find(ctx.ps_table, s->hash_key);
+
         if (!item) {
             item = tc_pcalloc(ctx.ps_pool, sizeof(mysql_table_item_t));
-        }
-
-        if (item != NULL) {
-            item->list = link_list_create(ctx.ps_pool);
-            if (item->list != NULL) {
-                hash_add(ctx.ps_table, ctx.ps_pool, s->hash_key, item);
+            if (item != NULL) {
+                item->list = link_list_create(ctx.ps_pool);
+                if (item->list != NULL) {
+                    hash_add(ctx.ps_table, ctx.ps_pool, s->hash_key, item);
+                } else {
+                    tc_log_info(LOG_ERR, 0, "list create err");
+                    return false;
+                }
             } else {
-                tc_log_info(LOG_ERR, 0, "list create err");
+                tc_log_info(LOG_ERR, 0, "mysql item create err");
                 return false;
             }
-        } else {
-            tc_log_info(LOG_ERR, 0, "mysql item create err");
-            return false;
         }
 
         if (item->list->size > MAX_SP_SIZE) {
