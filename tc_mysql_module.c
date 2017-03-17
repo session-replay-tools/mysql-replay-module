@@ -11,14 +11,13 @@
 #define MAX_USER_INFO 4096
 #define ENCRYPT_LEN 16
 #define SEED_323_LENGTH  8
-#define TC_LARGE_POOL_SIZE (3 * TC_PLUGIN_POOL_SIZE)
 
 typedef struct {
     uint32_t sec_auth_checked:1;
     uint32_t sec_auth_not_yet_done:1;
     uint32_t first_auth_sent:1;
     uint32_t auth_packet_already_added:1;
-    uint32_t update_fir_auth_table_item_switch:4;
+    uint32_t update_auth_table_item_switch:4;
     char     scramble[SCRAMBLE_LENGTH + 1];
     char     seed323[SEED_323_LENGTH + 1];
     char     password[MAX_PASSWORD_LEN];
@@ -32,69 +31,98 @@ typedef struct {
 
 
 typedef struct {
-    tc_pool_t      *pool;
-    hash_table     *table;
+    tc_pool_t      *fir_auth_pool;
+    tc_pool_t      *sec_auth_pool;
+    tc_pool_t      *ps_pool;
     hash_table     *fir_auth_table;
     hash_table     *sec_auth_table;
+    hash_table     *ps_table;
 } tc_mysql_ctx_t;
 
 /* TODO allocate it on heap */
 static tc_mysql_ctx_t ctx;
 
+
 static int 
 init_mysql_module()
 {
+    tc_pool_t *pool;
 
-    ctx.pool = tc_create_pool(TC_LARGE_POOL_SIZE, TC_PLUGIN_POOL_SUB_SIZE, 0);
+    pool = tc_create_pool(TC_PLUGIN_POOL_SIZE, TC_PLUGIN_POOL_SUB_SIZE, 0);
+    if (pool) {
+        ctx.fir_auth_pool = pool;
+    } else {
+        return TC_ERR;
+    }
 
-    if (ctx.pool) {
+    pool = tc_create_pool(TC_PLUGIN_POOL_SIZE, TC_PLUGIN_POOL_SUB_SIZE, 0);
+    if (pool) {
+        ctx.sec_auth_pool = pool;
+    } else {
+        return TC_ERR;
+    }
 
-        ctx.table = hash_create(ctx.pool, 65536);
-        if (ctx.table == NULL) {
-            return TC_ERR;
-        }
+    pool = tc_create_pool(TC_PLUGIN_POOL_SIZE, TC_PLUGIN_POOL_SUB_SIZE, 0);
+    if (pool) {
+        ctx.ps_pool = pool;
+    } else {
+        return TC_ERR;
+    }
 
-        ctx.fir_auth_table = hash_create(ctx.pool, 65536);
-        if (ctx.fir_auth_table == NULL) {
-            return TC_ERR;
-        }
+    ctx.fir_auth_table = hash_create(ctx.fir_auth_pool, 65536);
+    if (ctx.fir_auth_table == NULL) {
+        return TC_ERR;
+    }
 
-        ctx.sec_auth_table = hash_create(ctx.pool, 65536);
-        if (ctx.sec_auth_table == NULL) {
-            return TC_ERR;
-        }
+    ctx.sec_auth_table = hash_create(ctx.sec_auth_pool, 65536);
+    if (ctx.sec_auth_table == NULL) {
+        return TC_ERR;
+    }
 
-        return TC_OK;
+    ctx.ps_table = hash_create(ctx.ps_pool, 65536);
+    if (ctx.ps_table == NULL) {
+        return TC_ERR;
+    }
 
-    } 
+    return TC_OK;
+}
 
-    return TC_ERR;
+
+static int remove_fir_auth(uint64_t key)
+{
+    void *value = hash_find(ctx.fir_auth_table, key);
+    if (value != NULL) {
+        hash_del(ctx.fir_auth_table, ctx.fir_auth_pool, key);
+        tc_pfree(ctx.fir_auth_pool, value);
+        tc_log_debug1(LOG_INFO, 0, "hash del fir auth:%llu", key);
+    }
+
+    return TC_OK;
+}
+
+
+static int remove_sec_auth(uint64_t key)
+{
+    void *value = hash_find(ctx.sec_auth_table, key);
+    if (value != NULL) {
+        hash_del(ctx.sec_auth_table, ctx.sec_auth_pool, key);
+        tc_pfree(ctx.sec_auth_pool, value);
+        tc_log_debug1(LOG_INFO, 0, "hash del for sec auth:%llu", key);
+    }
+
+    return TC_OK;
 }
 
 
 static int 
-release_resources(uint64_t key)
+remove_ps_stmt(uint64_t key)
 {
     void               *value;
     link_list          *list;
     p_link_node         ln, tln;
     mysql_table_item_t *item;
 
-    value = hash_find(ctx.fir_auth_table, key);
-    if (value != NULL) {
-        hash_del(ctx.fir_auth_table, ctx.pool, key);
-        tc_pfree(ctx.pool, value);
-        tc_log_debug1(LOG_INFO, 0, "hash del fir auth:%llu", key);
-    }
-
-    value = hash_find(ctx.sec_auth_table, key);
-    if (value != NULL) {
-        hash_del(ctx.sec_auth_table, ctx.pool, key);
-        tc_pfree(ctx.pool, value);
-        tc_log_debug1(LOG_INFO, 0, "hash del for sec auth:%llu", key);
-    }
-
-    value = hash_find(ctx.table, key);
+    value = hash_find(ctx.ps_table, key);
     if (value != NULL) {
         item = value;
         list = item->list;
@@ -103,16 +131,26 @@ release_resources(uint64_t key)
             tln = ln;
             ln = link_list_get_next(list, ln);
             link_list_remove(list, tln);
-            tc_pfree(ctx.pool, tln->data);
-            tc_pfree(ctx.pool, tln);
+            tc_pfree(ctx.ps_pool, tln->data);
+            tc_pfree(ctx.ps_pool, tln);
         }
 
-        tc_pfree(ctx.pool, value);
-        tc_pfree(ctx.pool, list);
+        tc_pfree(ctx.ps_pool, value);
+        tc_pfree(ctx.ps_pool, list);
 
-        hash_del(ctx.table, ctx.pool, key);
+        hash_del(ctx.ps_table, ctx.ps_pool, key);
     }
 
+    return TC_OK;
+}
+
+
+static int 
+release_resources(uint64_t key)
+{
+    remove_fir_auth(key);
+    remove_sec_auth(key);
+    remove_ps_stmt(key);
     return TC_OK;
 }
 
@@ -155,6 +193,7 @@ remove_table_obsolete_items(time_t thresh_access_tme)
     }
 }
 
+
 static void 
 remove_obsolete_resources(int is_full) 
 {
@@ -169,6 +208,7 @@ remove_obsolete_resources(int is_full)
     remove_table_obsolete_items(thresh_access_tme);
 }
 
+
 static void 
 exit_mysql_module() 
 {
@@ -176,14 +216,25 @@ exit_mysql_module()
 
     remove_obsolete_resources(1);
 
-    if (ctx.pool != NULL) {
-        tc_destroy_pool(ctx.pool);
-        ctx.table = NULL;
+    if (ctx.fir_auth_pool != NULL) {
+        tc_destroy_pool(ctx.fir_auth_pool);
+        ctx.fir_auth_pool = NULL;
         ctx.fir_auth_table = NULL;
+    }
+
+    if (ctx.sec_auth_pool != NULL) {
+        tc_destroy_pool(ctx.sec_auth_pool);
+        ctx.sec_auth_pool = NULL;
         ctx.sec_auth_table = NULL;
-        ctx.pool  = NULL;
+    }
+
+    if (ctx.ps_pool != NULL) {
+        tc_destroy_pool(ctx.ps_pool);
+        ctx.ps_pool = NULL;
+        ctx.ps_table = NULL;
     }
 }
+
 
 static bool
 check_renew_session(tc_iph_t *ip, tc_tcph_t *tcp)
@@ -245,8 +296,8 @@ check_pack_needed_for_recons(tc_sess_t *s, tc_iph_t *ip, tc_tcph_t *tcp)
     if (s->cur_pack.cont_len > 0) {
     
         mysql_sess = s->data;
-        mysql_sess->update_fir_auth_table_item_switch++;
-        if (mysql_sess->update_fir_auth_table_item_switch == 0) {
+        mysql_sess->update_auth_table_item_switch++;
+        if (mysql_sess->update_auth_table_item_switch == 0) {
             if (hash_find(ctx.fir_auth_table, s->hash_key) == NULL) {
                 tc_log_info(LOG_NOTICE, 0, "no fir auth for key:%llu", 
                         s->hash_key);
@@ -265,21 +316,22 @@ check_pack_needed_for_recons(tc_sess_t *s, tc_iph_t *ip, tc_tcph_t *tcp)
             return false;
         }
 
-        item = hash_find(ctx.table, s->hash_key);
+        item = hash_find(ctx.ps_table, s->hash_key);
         if (!item) {
-            item = tc_pcalloc(ctx.pool, sizeof(mysql_table_item_t));
-            if (item != NULL) {
-                item->list = link_list_create(ctx.pool);
-                if (item->list != NULL) {
-                    hash_add(ctx.table, ctx.pool, s->hash_key, item);
-                } else {
-                    tc_log_info(LOG_ERR, 0, "list create err");
-                    return false;
-                }
+            item = tc_pcalloc(ctx.ps_pool, sizeof(mysql_table_item_t));
+        }
+
+        if (item != NULL) {
+            item->list = link_list_create(ctx.ps_pool);
+            if (item->list != NULL) {
+                hash_add(ctx.ps_table, ctx.ps_pool, s->hash_key, item);
             } else {
-                tc_log_info(LOG_ERR, 0, "mysql item create err");
+                tc_log_info(LOG_ERR, 0, "list create err");
                 return false;
             }
+        } else {
+            tc_log_info(LOG_ERR, 0, "mysql item create err");
+            return false;
         }
 
         if (item->list->size > MAX_SP_SIZE) {
@@ -288,8 +340,8 @@ check_pack_needed_for_recons(tc_sess_t *s, tc_iph_t *ip, tc_tcph_t *tcp)
 
         tc_log_debug1(LOG_INFO, 0, "push packet:%u", ntohs(s->src_port));
 
-        pkt = (unsigned char *) cp_fr_ip_pack(ctx.pool, ip);
-        ln  = link_node_malloc(ctx.pool, pkt);
+        pkt = (unsigned char *) cp_fr_ip_pack(ctx.ps_pool, ip);
+        ln  = link_node_malloc(ctx.ps_pool, pkt);
         ln->key = ntohl(tcp->seq);
         link_list_append_by_order(item->list, ln);
         item->tot_cont_len += s->cur_pack.cont_len;
@@ -329,13 +381,13 @@ mysql_dispose_auth(tc_sess_t *s, tc_iph_t *ip, tc_tcph_t *tcp)
             return TC_ERR;
         }
         mysql_sess->first_auth_sent = 1;
-        value = hash_find(ctx.fir_auth_table, s->hash_key);
-        if (value == NULL) {
-            value = (void *) cp_fr_ip_pack(ctx.pool, ip);
-            hash_add(ctx.fir_auth_table, ctx.pool, s->hash_key, value);
-            tc_log_debug3(LOG_DEBUG, 0, "s:%p,hash add fir auth:%llu,value:%p",
-                    s, s->hash_key, value);
-        }
+
+        release_resources(s->hash_key);
+
+        value = (void *) cp_fr_ip_pack(ctx.fir_auth_pool, ip);
+        hash_add(ctx.fir_auth_table, ctx.fir_auth_pool, s->hash_key, value);
+        tc_log_debug3(LOG_DEBUG, 0, "s:%p,hash add fir auth:%llu,value:%p",
+                s, s->hash_key, value);
 
     } else if (mysql_sess->first_auth_sent && mysql_sess->sec_auth_not_yet_done)
     {
@@ -350,16 +402,12 @@ mysql_dispose_auth(tc_sess_t *s, tc_iph_t *ip, tc_tcph_t *tcp)
         change_clt_second_auth_content(payload, cont_len, encryption);
         mysql_sess->sec_auth_not_yet_done = 0;
 
-        value = hash_find(ctx.sec_auth_table, s->hash_key);
-        if (value == NULL) {
-            value = (void *) cp_fr_ip_pack(ctx.pool, ip);
-            hash_add(ctx.sec_auth_table, ctx.pool, s->hash_key, value);
-        }
+        value = (void *) cp_fr_ip_pack(ctx.sec_auth_pool, ip);
+        hash_add(ctx.sec_auth_table, ctx.sec_auth_pool, s->hash_key, value);
     }
 
     return TC_OK;
 }
-
 
 
 static int 
@@ -415,7 +463,7 @@ prepare_for_renew_session(tc_sess_t *s, tc_iph_t *ip, tc_tcph_t *tcp)
         tc_log_debug1(LOG_INFO, 0, "no sec auth:%u", ntohs(s->src_port));
     }
 
-    item = hash_find(ctx.table, s->hash_key);
+    item = hash_find(ctx.ps_table, s->hash_key);
     if (item) {
         tot_clen += item->tot_cont_len;
     }
@@ -472,13 +520,13 @@ proc_when_sess_created(tc_sess_t *s)
 }
 
 
-
 static int 
 proc_when_sess_destroyed(tc_sess_t *s)
 {
     release_resources(s->hash_key);
     return TC_OK;
 }
+
 
 static int
 proc_greet(tc_sess_t *s, tc_iph_t *ip, tc_tcph_t *tcp)
