@@ -1,12 +1,12 @@
-#A TCPCopy module for MySQL Replay
+# A TCPCopy module for MySQL Replay
 
 mysql-replay-module is a TCPCopy module that can be used to replay MySQL sessions to support real testing of MySQL applications. 
 
 Please refer to [TCPCopy](https://github.com/session-replay-tools/tcpcopy) for more details before reading the following.
 
-##Installation
+## Installation
 
-###Getting intercept installed on the assistant server
+### Getting intercept installed on the assistant server
 1. git clone git://github.com/session-replay-tools/intercept.git
 2. cd intercept
 3. ./configure --with-resp-payload
@@ -14,7 +14,7 @@ Please refer to [TCPCopy](https://github.com/session-replay-tools/tcpcopy) for m
 5. make install
 
 
-###Getting tcpcopy installed on the online server
+### Getting tcpcopy installed on the online server
 1. git clone git://github.com/session-replay-tools/tcpcopy.git
 2. cd tcpcopy
 3. git clone git://github.com/session-replay-tools/mysql-replay-module.git
@@ -23,9 +23,9 @@ Please refer to [TCPCopy](https://github.com/session-replay-tools/tcpcopy) for m
 6. make install
 
 
-##Usage guide
+## Usage guide
  
-###1) On the target server which runs MySQL applications:
+### 1) On the target server which runs MySQL applications:
       Set route commands to route response packets to the assistant server
 
         For example:
@@ -36,7 +36,7 @@ Please refer to [TCPCopy](https://github.com/session-replay-tools/tcpcopy) for m
 
            route add -host 10.110.12.15 gw 10.110.12.18
 
-###2) On the assistant server which runs intercept(root privilege or the CAP_NET_RAW capability is required):
+### 2) On the assistant server which runs intercept(root privilege or the CAP_NET_RAW capability is required):
    
        ./intercept -F <filter> -i <device,> 
 	  
@@ -50,7 +50,7 @@ Please refer to [TCPCopy](https://github.com/session-replay-tools/tcpcopy) for m
       listens on port 3306 from device eth0 
     
 	
-###3) On the online source server (root privilege or the CAP_NET_RAW capability is required):
+### 3) On the online source server (root privilege or the CAP_NET_RAW capability is required):
       a) set user password pair in conf/plugin.conf in the installion directory
 
         Format:
@@ -71,16 +71,16 @@ Please refer to [TCPCopy](https://github.com/session-replay-tools/tcpcopy) for m
       '3306' on '10.110.12.17'(the target MySQL), and connect 10.110.12.18 for asking 
       intercept to pass response packets to it.
 
-##Note
+## Note
 1. Both MySQL instances on the target server and online server must have the same user accounts and their privileges although passwords could be different
 2. Only the complete sesssion could be replayed
 
 
-##Release History
+## Release History
 + 2014.09  v1.0    mysql-replay-module released
 
 
-##Bugs and feature requests
+## Bugs and feature requests
 Have a bug or a feature request? [Please open a new issue](https://github.com/session-replay-tools/mysql-replay-module/issues). Before opening any issue, please search for existing issues.
 
 
