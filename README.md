@@ -77,7 +77,7 @@ Please refer to [TCPCopy](https://github.com/session-replay-tools/tcpcopy) for m
 
 
 ## Release History
-+ 2014.09  v1.0    mysql-replay-module released
++ 2017.03  v1.0    mysql-replay-module released
 
 
 ## Bugs and feature requests
