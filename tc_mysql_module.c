@@ -335,6 +335,7 @@ check_pack_needed_for_recons(tc_sess_t *s, tc_iph_t *ip, tc_tcph_t *tcp)
         }
 
         if (item->list->size > MAX_SP_SIZE) {
+            tc_log_info(LOG_INFO, 0, "too many prepared stmts for a session");
             return false;
         }
 
