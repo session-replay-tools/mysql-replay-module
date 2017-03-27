@@ -13,6 +13,7 @@
 #define SEED_323_LENGTH  8
 
 typedef struct {
+    time_t   last_refresh_time;
     uint32_t sec_auth_checked:1;
     uint32_t sec_auth_not_yet_done:1;
     uint32_t first_auth_sent:1;
@@ -50,6 +51,9 @@ init_mysql_module()
 
     pool = tc_create_pool(TC_PLUGIN_POOL_SIZE, TC_PLUGIN_POOL_SUB_SIZE, 0);
     if (pool) {
+#if (TC_DETECT_MEMORY)
+        pool->d.is_traced = 1;
+#endif
         ctx.fir_auth_pool = pool;
     } else {
         return TC_ERR;
@@ -87,27 +91,47 @@ init_mysql_module()
     return TC_OK;
 }
 
-
-static int remove_fir_auth(uint64_t key)
+static unsigned char *
+copy_packet(tc_pool_t *pool, void *data)
 {
-    void *value = hash_find(ctx.fir_auth_table, key);
-    if (value != NULL) {
-        hash_del(ctx.fir_auth_table, ctx.fir_auth_pool, key);
-        tc_pfree(ctx.fir_auth_pool, value);
-        tc_log_debug1(LOG_INFO, 0, "hash del fir auth:%llu", key);
-    }
+    int            frame_len;
+    uint16_t       tot_len;
+    unsigned char *frame;
+    
+    tc_iph_t *ip = (tc_iph_t *) (((unsigned char *) data) + ETHERNET_HDR_LEN);
+    tot_len   = ntohs(ip->tot_len);
+    frame_len = ETHERNET_HDR_LEN + tot_len;
 
-    return TC_OK;
+    frame = (unsigned char *) tc_palloc(pool, frame_len);
+
+    if (frame != NULL) {    
+        memcpy(frame + ETHERNET_HDR_LEN, ip, tot_len);
+    }    
+
+    return frame;
 }
 
 
-static int remove_sec_auth(uint64_t key)
+static int 
+remove_or_refresh_fir_auth(uint64_t key, int is_refresh)
 {
-    void *value = hash_find(ctx.sec_auth_table, key);
+    void *value, *new_value;
+    value = hash_find(ctx.fir_auth_table, key);
+
     if (value != NULL) {
-        hash_del(ctx.sec_auth_table, ctx.sec_auth_pool, key);
-        tc_pfree(ctx.sec_auth_pool, value);
-        tc_log_debug1(LOG_INFO, 0, "hash del for sec auth:%llu", key);
+        hash_del(ctx.fir_auth_table, ctx.fir_auth_pool, key);
+        if (is_refresh) {
+            new_value = copy_packet(ctx.fir_auth_pool, value);
+            hash_add(ctx.fir_auth_table, ctx.fir_auth_pool, key, new_value);
+#if (TC_DETECT_MEMORY)
+            tc_log_info(LOG_INFO, 0, "refresh fir auth:%llu, new addr:%p",
+                    key, new_value);
+#endif
+        }
+#if (TC_DETECT_MEMORY)
+        tc_log_info(LOG_INFO, 0, "free value:%p for key:%llu", value, key);
+#endif
+        tc_pfree(ctx.fir_auth_pool, value);
     }
 
     return TC_OK;
@@ -115,15 +139,57 @@ static int remove_sec_auth(uint64_t key)
 
 
 static int 
-remove_ps_stmt(uint64_t key)
+remove_or_refresh_sec_auth(uint64_t key, int is_refresh)
 {
-    void               *value;
+    void *value, *new_value;
+
+    value = hash_find(ctx.sec_auth_table, key);
+    if (value != NULL) {
+        hash_del(ctx.sec_auth_table, ctx.sec_auth_pool, key);
+        if (is_refresh) {
+            new_value = copy_packet(ctx.sec_auth_pool, value);
+            hash_add(ctx.sec_auth_table, ctx.sec_auth_pool, key, new_value);
+#if (TC_DETECT_MEMORY)
+            tc_log_info(LOG_INFO, 0, "refresh sec auth:%llu, new addr:%p", 
+                    key, new_value);
+#endif
+        }
+#if (TC_DETECT_MEMORY)
+        tc_log_info(LOG_INFO, 0, "free value:%p for key:%llu", value, key);
+#endif
+        tc_pfree(ctx.sec_auth_pool, value);
+    }
+
+    return TC_OK;
+}
+
+
+static int 
+remove_or_refresh_ps_stmt(uint64_t key, int is_refresh)
+{
+    void               *value, *pkt;
     link_list          *list;
-    p_link_node         ln, tln;
-    mysql_table_item_t *item;
+    p_link_node         ln, tln, new_ln;
+    mysql_table_item_t *item, *new_item;
 
     value = hash_find(ctx.ps_table, key);
     if (value != NULL) {
+        if (is_refresh) {
+            new_item = tc_pcalloc(ctx.ps_pool, sizeof(mysql_table_item_t));
+            if (new_item != NULL) {
+                new_item->list = link_list_create(ctx.ps_pool);
+                if (new_item->list != NULL) {
+                    hash_add(ctx.ps_table, ctx.ps_pool, key, new_item);
+                } else {
+                    tc_log_info(LOG_ERR, 0, "list create err");
+                    is_refresh = 0;
+                }
+            } else {
+                tc_log_info(LOG_ERR, 0, "mysql item create err");
+                is_refresh = 0;
+            }
+        }
+
         item = value;
         list = item->list;
         ln   = link_list_first(list);
@@ -131,6 +197,16 @@ remove_ps_stmt(uint64_t key)
             tln = ln;
             ln = link_list_get_next(list, ln);
             link_list_remove(list, tln);
+            if (is_refresh) {
+                pkt = (unsigned char *) copy_packet(ctx.ps_pool, tln->data);
+                new_ln  = link_node_malloc(ctx.ps_pool, pkt);
+                new_ln->key = tln->key;
+                link_list_append_by_order(new_item->list, new_ln);
+#if (TC_DETECT_MEMORY)
+                tc_log_info(LOG_INFO, 0, "refresh ps:%llu, new addr:%p, ln:%p",
+                        key, pkt, new_ln);
+#endif
+            }
             tc_pfree(ctx.ps_pool, tln->data);
             tc_pfree(ctx.ps_pool, tln);
         }
@@ -139,6 +215,14 @@ remove_ps_stmt(uint64_t key)
         tc_pfree(ctx.ps_pool, list);
 
         hash_del(ctx.ps_table, ctx.ps_pool, key);
+                    
+        if (is_refresh) {
+            hash_add(ctx.ps_table, ctx.ps_pool, key, new_item);
+#if (TC_DETECT_MEMORY)
+            tc_log_info(LOG_INFO, 0, "refresh:%llu, new item:%p",
+                    key, new_item);
+#endif
+        }
     }
 
     return TC_OK;
@@ -148,12 +232,22 @@ remove_ps_stmt(uint64_t key)
 static int 
 release_resources(uint64_t key)
 {
-    remove_fir_auth(key);
-    remove_sec_auth(key);
-    remove_ps_stmt(key);
+    remove_or_refresh_fir_auth(key, 0);
+    remove_or_refresh_sec_auth(key, 0);
+    remove_or_refresh_ps_stmt(key, 0);
+
     return TC_OK;
 }
 
+static int 
+refresh_resources(uint64_t key)
+{
+    remove_or_refresh_fir_auth(key, 1);
+    remove_or_refresh_sec_auth(key, 1);
+    remove_or_refresh_ps_stmt(key, 1);
+
+    return TC_OK;
+}
 
 static void 
 remove_table_obsolete_items(time_t thresh_access_tme) 
@@ -176,7 +270,7 @@ remove_table_obsolete_items(time_t thresh_access_tme)
                 next_ln = link_list_get_next(l, ln);
                 if (hn->access_time < thresh_access_tme) {
                     tc_log_info(LOG_INFO, 0, 
-                            "key:%llu, access time:%d, thresh_access_tme:%d",
+                            "key:%llu, access time:%u, thresh_access_tme:%u",
                             hn->key, hn->access_time, thresh_access_tme);
 
                     release_resources(hn->key);
@@ -286,6 +380,7 @@ check_renew_session(tc_iph_t *ip, tc_tcph_t *tcp)
 static bool 
 check_pack_needed_for_recons(tc_sess_t *s, tc_iph_t *ip, tc_tcph_t *tcp)
 {
+    int                 diff;
     uint16_t            size_tcp;
     p_link_node         ln;
     unsigned char      *payload, command, *pkt;
@@ -296,6 +391,19 @@ check_pack_needed_for_recons(tc_sess_t *s, tc_iph_t *ip, tc_tcph_t *tcp)
     if (s->cur_pack.cont_len > 0) {
     
         mysql_sess = s->data;
+
+        diff = tc_time() - mysql_sess->last_refresh_time;
+
+        if (diff >= MAX_IDLE_TIME) {
+            refresh_resources(s->hash_key);
+            mysql_sess->last_refresh_time = tc_time();
+            mysql_sess->update_auth_table_item_switch = 0;
+#if (TC_DETECT_MEMORY)
+            tc_log_info(LOG_NOTICE, 0, "refresh time:%u for key:%llu", 
+                    mysql_sess->last_refresh_time, s->hash_key);
+#endif
+        }
+        
         mysql_sess->update_auth_table_item_switch++;
         if (mysql_sess->update_auth_table_item_switch == 0) {
             if (hash_find(ctx.fir_auth_table, s->hash_key) == NULL) {
@@ -381,14 +489,19 @@ mysql_dispose_auth(tc_sess_t *s, tc_iph_t *ip, tc_tcph_t *tcp)
             tc_log_info(LOG_WARN, 0, "change fir auth unsuccessful");
             return TC_ERR;
         }
+
         mysql_sess->first_auth_sent = 1;
 
         release_resources(s->hash_key);
-
+        
         value = (void *) cp_fr_ip_pack(ctx.fir_auth_pool, ip);
         hash_add(ctx.fir_auth_table, ctx.fir_auth_pool, s->hash_key, value);
-        tc_log_debug3(LOG_DEBUG, 0, "s:%p,hash add fir auth:%llu,value:%p",
+        mysql_sess->last_refresh_time = tc_time();
+
+#if (TC_DETECT_MEMORY)
+        tc_log_info(LOG_INFO, 0, "s:%p,hash add fir auth:%llu,value:%p",
                 s, s->hash_key, value);
+#endif
 
     } else if (mysql_sess->first_auth_sent && mysql_sess->sec_auth_not_yet_done)
     {
