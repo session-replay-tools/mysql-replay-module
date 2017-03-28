@@ -174,15 +174,18 @@ remove_or_refresh_ps_stmt(uint64_t key, int is_refresh)
 
     value = hash_find(ctx.ps_table, key);
     if (value != NULL) {
+
+        item = value;
+
         if (is_refresh) {
             new_item = tc_pcalloc(ctx.ps_pool, sizeof(mysql_table_item_t));
             if (new_item != NULL) {
                 new_item->list = link_list_create(ctx.ps_pool);
-                if (new_item->list != NULL) {
-                    hash_add(ctx.ps_table, ctx.ps_pool, key, new_item);
-                } else {
+                if (new_item->list == NULL) {
                     tc_log_info(LOG_ERR, 0, "list create err");
                     is_refresh = 0;
+                } else {
+                    new_item->tot_cont_len = item->tot_cont_len;
                 }
             } else {
                 tc_log_info(LOG_ERR, 0, "mysql item create err");
@@ -190,7 +193,6 @@ remove_or_refresh_ps_stmt(uint64_t key, int is_refresh)
             }
         }
 
-        item = value;
         list = item->list;
         ln   = link_list_first(list);
         while (ln) {
@@ -389,28 +391,6 @@ check_pack_needed_for_recons(tc_sess_t *s, tc_iph_t *ip, tc_tcph_t *tcp)
 
 
     if (s->cur_pack.cont_len > 0) {
-    
-        mysql_sess = s->data;
-
-        diff = tc_time() - mysql_sess->last_refresh_time;
-
-        if (diff >= MAX_IDLE_TIME) {
-            refresh_resources(s->hash_key);
-            mysql_sess->last_refresh_time = tc_time();
-            mysql_sess->update_auth_table_item_switch = 0;
-#if (TC_DETECT_MEMORY)
-            tc_log_info(LOG_NOTICE, 0, "refresh time:%u for key:%llu", 
-                    mysql_sess->last_refresh_time, s->hash_key);
-#endif
-        }
-        
-        mysql_sess->update_auth_table_item_switch++;
-        if (mysql_sess->update_auth_table_item_switch == 0) {
-            if (hash_find(ctx.fir_auth_table, s->hash_key) == NULL) {
-                tc_log_info(LOG_NOTICE, 0, "no fir auth for key:%llu", 
-                        s->hash_key);
-            }
-        }
 
         size_tcp = tcp->doff << 2;
         payload = (unsigned char *) ((char *) tcp + size_tcp);
@@ -421,6 +401,29 @@ check_pack_needed_for_recons(tc_sess_t *s, tc_iph_t *ip, tc_tcph_t *tcp)
         command  = payload[0];
 
         if (command != COM_STMT_PREPARE) {
+            
+            mysql_sess = s->data;
+
+            diff = tc_time() - mysql_sess->last_refresh_time;
+
+            if (diff >= MAX_RETHRESH_TIME) {
+                refresh_resources(s->hash_key);
+                mysql_sess->last_refresh_time = tc_time();
+                mysql_sess->update_auth_table_item_switch = 0;
+#if (TC_DETECT_MEMORY)
+                tc_log_info(LOG_NOTICE, 0, "refresh time:%u for key:%llu", 
+                        mysql_sess->last_refresh_time, s->hash_key);
+#endif
+            }
+
+            mysql_sess->update_auth_table_item_switch++;
+            if (mysql_sess->update_auth_table_item_switch == 0) {
+                if (hash_find(ctx.fir_auth_table, s->hash_key) == NULL) {
+                    tc_log_info(LOG_NOTICE, 0, "no fir auth for key:%llu", 
+                            s->hash_key);
+                }
+            }
+
             return false;
         }
 
@@ -499,8 +502,8 @@ mysql_dispose_auth(tc_sess_t *s, tc_iph_t *ip, tc_tcph_t *tcp)
         mysql_sess->last_refresh_time = tc_time();
 
 #if (TC_DETECT_MEMORY)
-        tc_log_info(LOG_INFO, 0, "s:%p,hash add fir auth:%llu,value:%p",
-                s, s->hash_key, value);
+        tc_log_info(LOG_INFO, 0, "s:%p,hash add fir auth:%llu,value:%p, p:%u",
+                s, s->hash_key, value, ntohs(s->src_port));
 #endif
 
     } else if (mysql_sess->first_auth_sent && mysql_sess->sec_auth_not_yet_done)
