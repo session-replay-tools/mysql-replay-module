@@ -14,6 +14,7 @@
 
 typedef struct {
     time_t   last_refresh_time;
+    uint32_t seq_after_ps;
     uint32_t sec_auth_checked:1;
     uint32_t sec_auth_not_yet_done:1;
     uint32_t first_auth_sent:1;
@@ -389,6 +390,13 @@ check_pack_needed_for_recons(tc_sess_t *s, tc_iph_t *ip, tc_tcph_t *tcp)
     tc_mysql_session   *mysql_sess;
     mysql_table_item_t *item;
 
+    mysql_sess = s->data;
+
+    if (s->sm.fake_syn) {
+        if (before(ntohl(tcp->seq), mysql_sess->seq_after_ps)) {
+            return false;
+        }
+    }
 
     if (s->cur_pack.cont_len > 0) {
 
@@ -402,8 +410,6 @@ check_pack_needed_for_recons(tc_sess_t *s, tc_iph_t *ip, tc_tcph_t *tcp)
 
         if (command != COM_STMT_PREPARE) {
             
-            mysql_sess = s->data;
-
             diff = tc_time() - mysql_sess->last_refresh_time;
 
             if (diff >= MAX_RETHRESH_TIME) {
@@ -495,16 +501,26 @@ mysql_dispose_auth(tc_sess_t *s, tc_iph_t *ip, tc_tcph_t *tcp)
 
         mysql_sess->first_auth_sent = 1;
 
-        release_resources(s->hash_key);
-        
-        value = (void *) cp_fr_ip_pack(ctx.fir_auth_pool, ip);
-        hash_add(ctx.fir_auth_table, ctx.fir_auth_pool, s->hash_key, value);
-        mysql_sess->last_refresh_time = tc_time();
+        if (!s->sm.fake_syn) {
+            release_resources(s->hash_key);
+
+            value = (void *) cp_fr_ip_pack(ctx.fir_auth_pool, ip);
+            hash_add(ctx.fir_auth_table, ctx.fir_auth_pool, s->hash_key, value);
+            mysql_sess->last_refresh_time = tc_time();
 
 #if (TC_DETECT_MEMORY)
-        tc_log_info(LOG_INFO, 0, "s:%p,hash add fir auth:%llu,value:%p, p:%u",
-                s, s->hash_key, value, ntohs(s->src_port));
+            tc_log_info(LOG_INFO, 0, "s:%p,hash add fir auth:%llu,value:%p, p:%u",
+                    s, s->hash_key, value, ntohs(s->src_port));
 #endif
+        } else {
+            hash_node *hn = hash_find_node(ctx.fir_auth_table, s->hash_key);
+            if (hn != NULL) {
+                mysql_sess->last_refresh_time = hn->create_time;
+            } else {
+                tc_log_info(LOG_WARN, 0, "hash node for key:%llu is nil", 
+                        s->hash_key);
+            }
+        }
 
     } else if (mysql_sess->first_auth_sent && mysql_sess->sec_auth_not_yet_done)
     {
@@ -519,8 +535,10 @@ mysql_dispose_auth(tc_sess_t *s, tc_iph_t *ip, tc_tcph_t *tcp)
         change_clt_second_auth_content(payload, cont_len, encryption);
         mysql_sess->sec_auth_not_yet_done = 0;
 
-        value = (void *) cp_fr_ip_pack(ctx.sec_auth_pool, ip);
-        hash_add(ctx.sec_auth_table, ctx.sec_auth_pool, s->hash_key, value);
+        if (!s->sm.fake_syn) {
+            value = (void *) cp_fr_ip_pack(ctx.sec_auth_pool, ip);
+            hash_add(ctx.sec_auth_table, ctx.sec_auth_pool, s->hash_key, value);
+        }
     }
 
     return TC_OK;
@@ -587,6 +605,8 @@ prepare_for_renew_session(tc_sess_t *s, tc_iph_t *ip, tc_tcph_t *tcp)
 
     tc_log_debug2(LOG_INFO, 0, "total len subtracted:%u,p:%u", tot_clen,
             ntohs(s->src_port));
+
+    mysql_sess->seq_after_ps = ntohl(tcp->seq);
 
     tcp->seq     = htonl(ntohl(tcp->seq) - tot_clen);
     fir_tcp->seq = htonl(ntohl(tcp->seq) + 1);
