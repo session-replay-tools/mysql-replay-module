@@ -88,6 +88,10 @@ retrieve_mysql_user_pwd_info(tc_pool_t *pool, char *pairs)
         }
 
         p_user_info = (mysql_user *) tc_pcalloc(pool, sizeof(mysql_user));
+        if (p_user_info == NULL) {
+            return -1;
+        }
+
         strncpy(p_user_info->user, p, q - p);
         strncpy(p_user_info->password, q + 1, pair_end - q);
         key = get_key_from_user(p_user_info->user);
