@@ -82,6 +82,11 @@ retrieve_mysql_user_pwd_info(tc_pool_t *pool, char *pairs)
             pair_end = p + strlen(p) - 1;
         }
 
+        if (q == NULL || pair_end <= q) {
+            tc_log_info(LOG_WARN, 0, "user without password is found");
+            return -1;
+        }
+
         if ((q - p) >= 256 || (pair_end - q) >= 256) {
             tc_log_info(LOG_WARN, 0, "too long for user or password");
             return -1;
