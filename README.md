@@ -74,7 +74,8 @@ Please refer to [TCPCopy](https://github.com/session-replay-tools/tcpcopy) for m
 ## Note
 1. Both MySQL instances on the target server and online server must have the same user accounts and their privileges although passwords could be different
 2. Only the complete sesssion could be replayed
-3. Currently, it does not support MySQL 8.0 yet. If you want to use MySQL 5.7 production flows to test MySQL 8.0, you could add a proxy before MySQL 8.0.
+3. OpenSSL 1.1.0+ is currently unsupported.
+4. Currently, it does not support MySQL 8.0 yet. If you want to use MySQL 5.7 production flows to test MySQL 8.0, you could add a proxy before MySQL 8.0.
    Here we strongly suggest cetus(https://github.com/session-replay-tools/cetus) as a proxy.
 
 ## Release History
