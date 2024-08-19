@@ -82,6 +82,6 @@ Have a bug or a feature request? [Please open a new issue](https://github.com/se
 
 ## Copyright and License
 
-Copyright 2022 under [the BSD license](LICENSE).
+Copyright 2024 under [the BSD license](LICENSE).
 
 
