@@ -1,12 +1,12 @@
 # A TCPCopy module for MySQL Replay
 
-mysql-replay-module is a TCPCopy module that can be used to replay MySQL sessions to support real testing of MySQL applications. 
+The mysql-replay-module is a TCPCopy extension designed to replay MySQL sessions, enabling real-world testing of MySQL applications.
 
-Please refer to [TCPCopy](https://github.com/session-replay-tools/tcpcopy) for more details before reading the following.
+For detailed information, please consult [TCPCopy](https://github.com/session-replay-tools/tcpcopy) before proceeding.
 
 ## Installation
 
-### Getting intercept installed on the assistant server
+### Installing `intercept` on the Assistant Server
 1. git clone git://github.com/session-replay-tools/intercept.git
 2. cd intercept
 3. ./configure --with-resp-payload
@@ -14,7 +14,7 @@ Please refer to [TCPCopy](https://github.com/session-replay-tools/tcpcopy) for m
 5. make install
 
 
-### Getting tcpcopy installed on the online server
+### Installing `tcpcopy` on the Online Server
 1. git clone git://github.com/session-replay-tools/tcpcopy.git
 2. cd tcpcopy
 3. git clone git://github.com/session-replay-tools/mysql-replay-module.git
@@ -23,69 +23,64 @@ Please refer to [TCPCopy](https://github.com/session-replay-tools/tcpcopy) for m
 6. make install
 
 
-## Usage guide
+## Usage Guide
  
-### 1) On the target server which runs MySQL applications:
-      Set route commands to route response packets to the assistant server
+### 1. **On the Target Server Running MySQL Applications:**
 
-        For example:
+Configure the route commands to direct response packets to the assistant server. For example, assuming `10.110.12.18` is the IP address of the assistant server and `10.110.12.15` is the MySQL client IP address, use the following route command to direct all responses from `10.110.12.15` to the assistant server:
 
-           Assume 10.110.12.18 is the IP address of the assistant server and 
-        10.110.12.15 is the MySQL client IP address. We set the following route 
-        command to route all responses to the 10.110.12.15 to the assistant server.
+   `route add -host 10.110.12.15 gw 10.110.12.18`
 
-           route add -host 10.110.12.15 gw 10.110.12.18
+### 2. **On the Assistant Server Running `intercept` (Root Privilege or CAP_NET_RAW Capability Required):**
 
-### 2) On the assistant server which runs intercept(root privilege or the CAP_NET_RAW capability is required):
+  `./intercept -F <filter> -i <device>`
+
+   Note that the filter format is the same as the pcap filter. For example:
+
+   `./intercept -i eth0 -F 'tcp and src port 8080' -d`
+
+   In this example, `intercept` will capture response packets from a TCP-based application listening on port 3306, using the eth0 network device.
+ 
+### 3. **On the Online Source Server (Root Privilege or CAP_NET_RAW Capability Required):**
+
+a) Configure user password pairs in `conf/plugin.conf` within the installation directory.
+
+Format:
+
+`user user1@password1,user2@password2,...,userN@passwordN;`
+
+For example:
+
+`user root@123456;`
+        
+b) To start `tcpcopy`, use the following command:
+
+`./tcpcopy -x localServerPort-targetServerIP:targetServerPort -s <intercept server> [-c <ip range>]`
+
+For example (assuming 10.110.12.17 is the IP address of the target server):
+
+`./tcpcopy -x 3306-10.110.12.17:3306 -s 10.110.12.18`
+
+`tcpcopy` captures MySQL packets (assuming MySQL listens on port 3306) on the current server, modifies them as needed, and forwards them to port 3306 on `10.110.12.17` (the target MySQL server). It also connects to `10.110.12.18` to request that `intercept` forwards the response packets to it.
+
    
-       ./intercept -F <filter> -i <device,> 
-	  
-       Note that the filter format is the same as the pcap filter.
-        
-       For example:
-
-          ./intercept -i eth0 -F 'tcp and src port 3306' -d
-
-          intercept will capture response packets of the TCP based application which 
-      listens on port 3306 from device eth0 
-    
-	
-### 3) On the online source server (root privilege or the CAP_NET_RAW capability is required):
-      a) set user password pair in conf/plugin.conf in the installion directory
-
-        Format:
-           user user1@password1,user2@password2,...,userN@passwordN;
-
-        For example:
-           user root@123456;    
-        
-      b) start tcpcopy
-        ./tcpcopy -x localServerPort-targetServerIP:targetServerPort -s <intercept server,> 
-      
-        For example(assume 10.110.12.17 is the IP address of the target server):
-
-          ./tcpcopy -x 3306-10.110.12.17:3306 -s 10.110.12.18 
-
-          tcpcopy would capture MySQL packets(assume MySQL listens on 3306 port) on current 
-      server, do the necessary modifications and send these packets to the target port 
-      '3306' on '10.110.12.17'(the target MySQL), and connect 10.110.12.18 for asking 
-      intercept to pass response packets to it.
 
 ## Note
-1. Both MySQL instances on the target server and online server must have the same user accounts and their privileges although passwords could be different
-2. Only the complete sesssion could be replayed
-3. OpenSSL 1.1.0+ is currently unsupported.
-4. Currently, it does not support MySQL 8.0's caching_sha2_password yet. If you want to use MySQL 5.7 production flows to test MySQL 8.0, you should use mysql_native_password instead and assure that each user used in the test should also use the mysql_native_password plugin in user table.
+1. User Accounts and Privileges: Both MySQL instances on the target and online servers must have identical user accounts and privileges, though passwords can differ.
+2. Session Replay: Only complete sessions can be replayed.
+3. OpenSSL Support: OpenSSL 1.1.0+ is not currently supported.
+4. Password Plugin Compatibility: MySQL 8.0’s caching_sha2_password is not supported. To test MySQL 8.0 using MySQL 5.7 production flows, use mysql_native_password and ensure that all users involved in the test are configured with the mysql_native_password plugin.
+5. For additional assistance, visit [tcpcopy](https://github.com/session-replay-tools/tcpcopy).
 
 ## Release History
 + 2017.03  v1.0    mysql-replay-module released
++ 2024.09  v1.0    Open source fully uses English
 
-
-## Bugs and feature requests
+## Bugs and Feature Requests
 Have a bug or a feature request? [Please open a new issue](https://github.com/session-replay-tools/mysql-replay-module/issues). Before opening any issue, please search for existing issues.
 
 
-## Copyright and license
+## Copyright and License
 
 Copyright 2022 under [the BSD license](LICENSE).
 
