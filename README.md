@@ -37,7 +37,7 @@ Configure the route commands to direct response packets to the assistant server.
 
    Note that the filter format is the same as the pcap filter. For example:
 
-   `./intercept -i eth0 -F 'tcp and src port 8080' -d`
+   `./intercept -i eth0 -F 'tcp and src port 3306' -d`
 
    In this example, `intercept` will capture response packets from a TCP-based application listening on port 3306, using the eth0 network device.
  
