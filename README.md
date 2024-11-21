@@ -70,9 +70,10 @@ For example (assuming 10.110.12.17 is the IP address of the target server):
 1. User Accounts and Privileges: Both MySQL instances on the target and online servers must have identical user accounts and privileges, though passwords can differ.
 2. Session Replay: Only complete sessions can be replayed.
 3. OpenSSL Support: OpenSSL 1.1.0+ is not currently supported.
-4. Password Plugin Compatibility: MySQL 8.0’s caching_sha2_password is not supported. To test MySQL 8.0 using MySQL 5.7 production flows, use mysql_native_password and ensure that all users involved in the test are configured with the mysql_native_password plugin.
+4. Password Plugin Compatibility: MySQL 8.0’s **caching_sha2_password** is not supported. To test MySQL 8.0 using MySQL 5.7 production flows, use **mysql_native_password** and ensure that all users involved in the test are configured with the **mysql_native_password** plugin.
 5. The `./configure --with-resp-payload` option for `intercept` cannot be used together with the `./configure` option for `tcpcopy`.
-6. For additional assistance, visit [tcpcopy](https://github.com/session-replay-tools/tcpcopy).
+6. **tcpcopy with mysql-replay-module** only supports the MySQL protocol.
+7. For additional assistance, visit [tcpcopy](https://github.com/session-replay-tools/tcpcopy).
 
 ## Release History
 
