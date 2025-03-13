@@ -63,7 +63,7 @@ For example (assuming 10.110.12.17 is the IP address of the target server):
 
 `./tcpcopy -x 3306-10.110.12.17:3306 -s 10.110.12.18 -c 10.110.12.15`
 
-`tcpcopy` captures MySQL packets (assuming MySQL listens on port 3306) on the current server and modify all client ip to 10.110.12.15, modifies them as needed, and forwards them to port 3306 on `10.110.12.17` (the target MySQL server). It also connects to `10.110.12.18` to request that `intercept` forwards the response packets to it.
+`tcpcopy` captures MySQL packets (assuming MySQL listens on port 3306) on the current server, modifies all client IP addresses to 10.110.12.15, and forwards them to port 3306 on `10.110.12.17` (the target MySQL server). It also connects to `10.110.12.18` to request that `intercept` forwards the response packets to it.
 
 ## Note
 
